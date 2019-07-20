@@ -1,0 +1,2 @@
+# Mqtt_RemoteCallbackList
+Android中Mqtt实时消息以及通过RemoteCallbackList进行aidl回调
