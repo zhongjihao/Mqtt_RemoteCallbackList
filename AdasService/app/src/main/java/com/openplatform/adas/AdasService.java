@@ -74,7 +74,6 @@ public class AdasService extends Service {
     private INotifyCallback notifyCallback;
     private ILoginNotify loginNotify;
     private MQTTService mqttService;
-    private boolean isMucUnqiueNum = false;
     private CameraState dsmCameraState;
     private CameraState adasCameraState;
     private CameraState h264CameraState;
@@ -275,9 +274,17 @@ public class AdasService extends Service {
             @Override
             public void OnLogin(){
                 final AdasPrefs prefs = Factory.get().getApplicationPrefs();
-                String simNo = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO,OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO_DEFAULT);
                 LoginRequest loginRequest = null;
 
+                String mucUnqiueNum =  prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MUCUNQIUE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MUCUNQIUE_DEFAULT);
+                Log.d(TAG, "start login----->mucUnqiueNum: "+mucUnqiueNum);
+                if(!TextUtils.isEmpty(mucUnqiueNum)){
+                    prefs.putString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE, mucUnqiueNum);
+                    prefs.putString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SERIALNO, mucUnqiueNum);
+                    prefs.putString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO,mucUnqiueNum);
+                }
+
+                String simNo = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO,OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO_DEFAULT);
                 String terminalId = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE_DEFAULT);
                 String imei = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_IMEI, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_IMEI_DEFAULT);
                 String simType = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMTYPE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMTYPE_DEFAULT);
@@ -406,9 +413,10 @@ public class AdasService extends Service {
                     String mac = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAC,OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAC_DEFAULT);
                     String simNo = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO,OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO_DEFAULT);
                     boolean isNetOk = NetUtil.isNetworkAvailable(Factory.get().getApplicationContext());
-                    Log.d(TAG,"Msg network---->iccid: "+iccid+"   唯一号simNo:"+simNo+"  mac: "+mac+"   isNetOk: "+isNetOk+"   isMucUnqiueNum: "+isMucUnqiueNum);
+                    String mucUnqiueNum =  prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MUCUNQIUE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MUCUNQIUE_DEFAULT);
+                    Log.d(TAG,"Msg network---->iccid: "+iccid+"   唯一号simNo:"+simNo+"  mac: "+mac+"   isNetOk: "+isNetOk+"   mucUnqiueNum: "+mucUnqiueNum);
 
-                    if(isMucUnqiueNum){
+                    if(!TextUtils.isEmpty(mucUnqiueNum)){
                         if(isNetOk && !TextUtils.isEmpty(simNo) && (simNo.trim().length() == 11)){
                             loginNotify.OnLogin();
                             mSyncEs.submit(new SyncTimeTask());
@@ -567,12 +575,12 @@ public class AdasService extends Service {
             Log.d(TAG, "OnLogin------>simNo: " + loginRequest.getSimNo() + "  terminalId: " + loginRequest.getTerminalId() + "  imei: " + loginRequest.getImei() + "  simType: " + loginRequest.getSimType() + "  macAddress: " + loginRequest.getMacAddress() + "  serialNo: " + loginRequest.getSerialNo() + "  productType: " + loginRequest.getProductType()+"   deviceVersion: "+deviceVersion);
             final AdasPrefs prefs = Factory.get().getApplicationPrefs();
             if (!TextUtils.isEmpty(loginRequest.getSimNo()) && (loginRequest.getSimNo().trim().length() == 11)) { //mcu唯一号
-                isMucUnqiueNum = true;
+                prefs.putString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MUCUNQIUE, loginRequest.getSimNo().trim());
                 prefs.putString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE, loginRequest.getSimNo().trim());
                 prefs.putString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SERIALNO, loginRequest.getSimNo().trim());
                 prefs.putString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO,loginRequest.getSimNo().trim());
             }else {
-                isMucUnqiueNum = false;
+                prefs.putString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MUCUNQIUE, "");
                 prefs.putString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_ICCID,loginRequest.getSimNo());
 
                 String simNo = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO,OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_SIMNO_DEFAULT);

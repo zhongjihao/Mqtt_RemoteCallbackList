@@ -2,6 +2,9 @@ package com.openplatform.adas;
 
 import android.content.Context;
 
+import com.openplatform.adas.database.DBManager;
+import com.openplatform.adas.database.DataModel;
+import com.openplatform.adas.database.DataModelImpl;
 import com.openplatform.adas.network.HttpEngine;
 import com.openplatform.adas.network.IHttpEngine;
 import com.openplatform.adas.util.AdasPrefs;
@@ -20,6 +23,9 @@ public class FactoryImpl  extends Factory {
     private AdasServiceApplication mApplication;
     private IHttpEngine mHttpEngine;
     private AdasPrefs mOpenPlatformPrefs;
+    private DataModel mDataModel;
+    private DBManager mDbManager;
+
 
     private FactoryImpl() {
 
@@ -41,6 +47,9 @@ public class FactoryImpl  extends Factory {
         factory.mApplication = application;
         factory.mHttpEngine = new HttpEngine();
         factory.mOpenPlatformPrefs = new OpenPlatformPrefs(applicationContext);
+        factory.mDataModel = new DataModelImpl(applicationContext);
+        factory.mDbManager =  new DBManager(factory.mApplicationContext);
+
         factory.onRequiredInit();
 
         return factory;
@@ -78,6 +87,16 @@ public class FactoryImpl  extends Factory {
     @Override
     public AdasPrefs getApplicationPrefs(){
         return mOpenPlatformPrefs;
+    }
+
+    @Override
+    public  DataModel getDataModel(){
+        return mDataModel;
+    }
+
+    @Override
+    public DBManager getDbManager(){
+        return mDbManager;
     }
 
 }

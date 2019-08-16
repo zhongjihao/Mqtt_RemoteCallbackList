@@ -45,6 +45,7 @@ public interface DeviceCommand {
         int UPGRADE_SUCCESS = 4;//升级成功
         int UPGRADE_FAILED = 5;//升级失败
         int DOWNLOAD_NOT_COMPLETED = 6;//下载未完成
+        int ERROR = 7;//异常
     }
 
     interface MqttTermParamCmd {

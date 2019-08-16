@@ -55,6 +55,8 @@ public class ExecCmdManager {
     private static final String TAG = "ExecCmdManager";
     private AtomicBoolean mExecStatus;
     private String mCmd;
+    private String command;
+    private long rowId;
     private AdasPrefs prefs;
     private HashMap<String, FutureTask<UpdateItem>> downloadingMap = new HashMap<>();
     private ExecutorService downloadES = Executors.newFixedThreadPool(1,new NameThreadFactory("downloadApp"));
@@ -67,6 +69,14 @@ public class ExecCmdManager {
         Log.d(TAG,"X: ExecCmdManager");
     }
 
+    public String getCommand(){
+        return command;
+    }
+
+    public long getRowId() {
+        return rowId;
+    }
+
     public void processEvent(AtomicBoolean execStatus){
         mExecStatus = execStatus;
         mExecStatus.set(false);
@@ -74,7 +84,7 @@ public class ExecCmdManager {
             JSONObject jsonCmdMsg = new JSONObject(mCmd);
             String deviceId = jsonCmdMsg.getString("deviceId");
             String cmdSNO = jsonCmdMsg.getString("cmdSNO");
-            final String command = jsonCmdMsg.getString("command");
+            command = jsonCmdMsg.getString("command");
             Log.d(TAG,"processEvent------>deviceId: "+deviceId+"  cmdSNO: "+cmdSNO+"  command: "+command);
 
             if(command.equalsIgnoreCase("takePicture")){
@@ -328,6 +338,7 @@ public class ExecCmdManager {
                 mqttResponse.setDeviceId(deviceId);
                 mqttResponse.setCmdSNO(cmdSNO);
                 mqttResponse.setCommand(command);
+                rowId = Factory.get().getDbManager().insertCommand(deviceId,command,cmdSNO,DeviceCommand.MqttUpgradeCmdState.CmdReceived);
                 MqttResponse.Response response = new MqttResponse.Response();
                 response.setFlag(true);
                 response.setMessage("收到升级指令");
@@ -340,7 +351,7 @@ public class ExecCmdManager {
                 final String token = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_TOKEN, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_TOKEN_DEFAULT);
                 final String deviceCode = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE_DEFAULT);
                 final String productType = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_PRODUCTTYPE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_PRODUCTTYPE_DEFAULT);
-                Log.d(TAG, "processEvent---upgrade---->deviceCode: " + deviceCode + "  productType: " + productType);
+                Log.d(TAG, "processEvent---upgrade---->deviceCode: " + deviceCode + "  productType: " + productType+"  rowId: "+rowId);
                 try {
                     JSONObject object = new JSONObject();
                     object.put("deviceCode", deviceCode);
@@ -358,29 +369,50 @@ public class ExecCmdManager {
                                             for (DownUpgradeInfo.Data upgrade : response.getData()) {
                                                 if (upgrade.getApkType().equalsIgnoreCase(DeviceCommand.Upgrade.UpgradeApp.MAIN_APP)) {//主应用Adas
                                                     long versionCode = prefs.getLong(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAINAPP_VERSION, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAINAPP_VERSION_DEFAULT);
-                                                    Log.d(TAG, "OnDownUpgradeInfo-----upgrade main app, remote version: " + upgrade.getDeviceVersion() + "  local version: " + versionCode);
+                                                    Log.d(TAG, "OnDownUpgradeInfo-----upgrade main app, remote version: " + upgrade.getDeviceVersion() + "  local version: " + versionCode+"  rowId: "+rowId);
                                                     if(versionCode != upgrade.getDeviceVersion()){
                                                         UpdateItem item = new UpdateItem();
                                                         item.setDownloadUrl(upgrade.getFileFullName());
                                                         item.setFileSize(upgrade.getFileSize());
                                                         item.setFileMd5(upgrade.getFileMd5());
                                                         item.setVersion(upgrade.getDeviceVersion());
-                                                        download(item,command,mqttResponse);
+                                                        download(rowId,item,command,mqttResponse);
+                                                    }else {
+                                                        mExecStatus.set(true);
+                                                        Factory.get().getDbManager().deleteCommand(rowId);
+                                                        response(token, deviceCode, productType, DeviceCommand.Upgrade.CODE, DeviceCommand.Upgrade.UPGRADE_FAILED, "不允许重复版本升级");
+
+                                                        mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.UPGRADE_FAILED);
+                                                        ((MqttResponse.Response)(mqttResponse.getResponse())).setMessage("不允许重复版本升级");
+                                                        NotifyManager.getInstance().OnMqttSimpleCmdNotify(command,mqttResponse);
                                                     }
                                                 }
                                             }
+                                        }else {
+                                            SystemClock.sleep(10*1000);
+                                            reUpgrade(mqttResponse);
                                         }
                                     } catch (Exception e) {
                                         e.printStackTrace();
+                                        mExecStatus.set(true);
+                                        Factory.get().getDbManager().updateCmdState(rowId,DeviceCommand.MqttUpgradeCmdState.ERROR);
                                     }
                                 }
                             }, new IFailCallback() {
                                 @Override
                                 public void onFail(int errorCode, String errorStr) {
-                                    Log.e(TAG, "OnDownUpgradeInfo  errorCode: " + errorCode + "   errorStr: " + errorStr);
+                                    Log.e(TAG, "OnDownUpgradeInfo  errorCode: " + errorCode + "   errorStr: " + errorStr+"  rowId: "+rowId);
+                                    mExecStatus.set(true);
+                                    Factory.get().getDbManager().updateCmdState(rowId,DeviceCommand.MqttUpgradeCmdState.ERROR);
+                                    response(token, deviceCode, productType, DeviceCommand.Upgrade.CODE, DeviceCommand.Upgrade.UPGRADE_FAILED, "获取升级参数失败");
+
+                                    mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.UPGRADE_FAILED);
+                                    ((MqttResponse.Response)(mqttResponse.getResponse())).setMessage("获取升级参数失败");
+                                    NotifyManager.getInstance().OnMqttSimpleCmdNotify(command,mqttResponse);
                                 }
                             });
                 } catch (JSONException e) {
+                    mExecStatus.set(true);
                     e.printStackTrace();
                 }
             }else if(command.equalsIgnoreCase("deviceDetect")){
@@ -433,6 +465,76 @@ public class ExecCmdManager {
         Log.d(TAG,"X: processEvent");
     }
 
+
+    private void reUpgrade(final MqttResponse mqttResponse){
+        final String token = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_TOKEN, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_TOKEN_DEFAULT);
+        final String deviceCode = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE_DEFAULT);
+        final String productType = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_PRODUCTTYPE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_PRODUCTTYPE_DEFAULT);
+        Log.d(TAG, "reUpgrade---upgrade---->deviceCode: " + deviceCode + "  productType: " + productType+"  rowId: "+rowId);
+        try {
+            JSONObject object = new JSONObject();
+            object.put("deviceCode", deviceCode);
+            object.put("productType", productType);
+            Factory.get().getHttpEngine().OnPostRequest(UrlConstant.DOWN_UPGRADEINFO_URL, token, object.toString(),
+                    new ISuccessCallback() {
+                        @Override
+                        public void onSuccess(HashMap<String, String> result) {
+                            String body = result.get(IHttpEngine.KEY_BODY);
+                            Log.d(TAG, "reUpgrade----OnDownUpgradeInfo onSuccess---->body: " + body);
+                            try {
+                                DownUpgradeInfo response = new Gson().fromJson(body, DownUpgradeInfo.class);
+                                Log.d(TAG, "reUpgrade----OnDownUpgradeInfo onSuccess---->response: " + response.toString());
+                                if (response.getData() != null && response.getData().length > 0) {
+                                    for (DownUpgradeInfo.Data upgrade : response.getData()) {
+                                        if (upgrade.getApkType().equalsIgnoreCase(DeviceCommand.Upgrade.UpgradeApp.MAIN_APP)) {//主应用Adas
+                                            long versionCode = prefs.getLong(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAINAPP_VERSION, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAINAPP_VERSION_DEFAULT);
+                                            Log.d(TAG, "reUpgrade----OnDownUpgradeInfo-----upgrade main app, remote version: " + upgrade.getDeviceVersion() + "  local version: " + versionCode+"  rowId: "+rowId);
+                                            if(versionCode != upgrade.getDeviceVersion()){
+                                                UpdateItem item = new UpdateItem();
+                                                item.setDownloadUrl(upgrade.getFileFullName());
+                                                item.setFileSize(upgrade.getFileSize());
+                                                item.setFileMd5(upgrade.getFileMd5());
+                                                item.setVersion(upgrade.getDeviceVersion());
+                                                download(rowId,item,command,mqttResponse);
+                                            }else {
+                                                mExecStatus.set(true);
+                                                Factory.get().getDbManager().deleteCommand(rowId);
+                                                response(token, deviceCode, productType, DeviceCommand.Upgrade.CODE, DeviceCommand.Upgrade.UPGRADE_FAILED, "不允许重复版本升级");
+
+                                                mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.UPGRADE_FAILED);
+                                                ((MqttResponse.Response)(mqttResponse.getResponse())).setMessage("不允许重复版本升级");
+                                                NotifyManager.getInstance().OnMqttSimpleCmdNotify(command,mqttResponse);
+                                            }
+                                        }
+                                    }
+                                }else {
+                                    mExecStatus.set(true);
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                mExecStatus.set(true);
+                                Factory.get().getDbManager().updateCmdState(rowId,DeviceCommand.MqttUpgradeCmdState.ERROR);
+                            }
+                        }
+                    }, new IFailCallback() {
+                        @Override
+                        public void onFail(int errorCode, String errorStr) {
+                            Log.e(TAG, "reUpgrade----OnDownUpgradeInfo  errorCode: " + errorCode + "   errorStr: " + errorStr+"  rowId: "+rowId);
+                            mExecStatus.set(true);
+                            Factory.get().getDbManager().updateCmdState(rowId,DeviceCommand.MqttUpgradeCmdState.ERROR);
+                            response(token, deviceCode, productType, DeviceCommand.Upgrade.CODE, DeviceCommand.Upgrade.UPGRADE_FAILED, "获取升级参数失败");
+
+                            mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.UPGRADE_FAILED);
+                            ((MqttResponse.Response)(mqttResponse.getResponse())).setMessage("获取升级参数失败");
+                            NotifyManager.getInstance().OnMqttSimpleCmdNotify(command,mqttResponse);
+                        }
+                    });
+        } catch (JSONException e) {
+            mExecStatus.set(true);
+            e.printStackTrace();
+        }
+    }
+
     private void execCmd(String cmd){
         long startTime = System.currentTimeMillis();
         Log.d(TAG, "E: execCmd");
@@ -456,14 +558,14 @@ public class ExecCmdManager {
         return downloadingMap.get(item.getFileMd5()) != null;
     }
 
-    private void download(UpdateItem item,String topic,MqttResponse mqttResponse) {
+    private void download(long rowId,UpdateItem item,String topic,MqttResponse mqttResponse) {
         if (!isDownload(item)) {
-            Log.d(TAG,"start download");
-            DownloadFutureTask downloadFutureTask = new DownloadFutureTask(downloadingMap, item,topic,mqttResponse);
+            Log.d(TAG,"start download------>rowId: "+rowId);
+            DownloadFutureTask downloadFutureTask = new DownloadFutureTask(rowId,downloadingMap, item,topic,mqttResponse);
             downloadingMap.put(item.getFileMd5(), downloadFutureTask);
             downloadES.execute(downloadFutureTask);
         }else {
-            Log.e(TAG,"Download and upgrade in progress ....");
+            Log.e(TAG,"Download and upgrade in progress rowId: "+rowId);
         }
     }
 
@@ -473,25 +575,27 @@ public class ExecCmdManager {
         final UpdateItem item;
         final MqttResponse mqttResponse;
         final String topic;
+        final long rowId;
 
-        public DownloadFutureTask(HashMap<String, FutureTask<UpdateItem>> downloadingMap,UpdateItem item,String topic,MqttResponse mqttResponse) {
-            super(new DownloadCallable(item,topic,mqttResponse));
+        public DownloadFutureTask(long rowId,HashMap<String, FutureTask<UpdateItem>> downloadingMap,UpdateItem item,String topic,MqttResponse mqttResponse) {
+            super(new DownloadCallable(rowId,item,topic,mqttResponse));
             this.downloadingMap = downloadingMap;
             this.item = item;
             this.topic = topic;
             this.mqttResponse = mqttResponse;
-            item.setStatus(DownloadStatus.WAITE);
+            this.item.setStatus(DownloadStatus.WAITE);
+            this.rowId = rowId;
         }
 
         @Override
         protected void done() {
             super.done();
+            Log.d(TAG,"E: done----->download status: "+item.getStatus()+"   rowId: "+rowId);
             try {
                 downloadingMap.remove(item.getFileMd5());
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            Log.d(TAG,"E: done----->download status: "+item.getStatus());
             if(item.getStatus() != DownloadStatus.FAILED){
                 Log.d(TAG,"item.getStatus() != DownloadStatus.FAILED");
                 final String token = prefs.getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_TOKEN,OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_TOKEN_DEFAULT);
@@ -525,6 +629,7 @@ public class ExecCmdManager {
                         }
                         if (result != null && result.successMsg != null && (0< result.successMsg.size()) && result.successMsg.get(result.successMsg.size() - 1).toLowerCase().contains("SUCCESS".toLowerCase())) {
                             Log.d(TAG,"Upgrade COMPLETE");
+                            Factory.get().getDbManager().updateCmdState(rowId,DeviceCommand.MqttUpgradeCmdState.UPGRADE_SUCCESS);
                             item.setStatus(DownloadStatus.COMPLETE);
                             prefs.putLong(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAINAPP_VERSION,item.getVersion());
                             response(token,deviceCode,productType,DeviceCommand.Upgrade.CODE,DeviceCommand.Upgrade.UPGRADE_SUCCESS,item.getVersion()+"版本升级成功");
@@ -532,20 +637,25 @@ public class ExecCmdManager {
                             ((MqttResponse.Response)(mqttResponse.getResponse())).setMessage(item.getVersion()+"版本升级成功");
                             mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.UPGRADE_SUCCESS);
                             NotifyManager.getInstance().OnMqttSimpleCmdNotify(topic,mqttResponse);
+
+                            downloadFile.delete();
+
+                            SystemClock.sleep(1500);
                         }else {
-                            Log.e(TAG,"Upgrade Failed");
+                            Log.e(TAG,"Upgrade Failed  download path: "+downloadFile.getAbsolutePath());
+                            Factory.get().getDbManager().updateUpgradeFile(rowId,DeviceCommand.MqttUpgradeCmdState.UPGRADE_FAILED,downloadFile.getAbsolutePath());
                             response(token,deviceCode,productType,DeviceCommand.Upgrade.CODE,DeviceCommand.Upgrade.UPGRADE_FAILED,item.getVersion()+"版本升级失败");
 
                             ((MqttResponse.Response)(mqttResponse.getResponse())).setMessage(item.getVersion()+"版本升级失败");
                             mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.UPGRADE_FAILED);
                             NotifyManager.getInstance().OnMqttSimpleCmdNotify(topic,mqttResponse);
                         }
-                        downloadFile.delete();
-
-                        SystemClock.sleep(1500);
+                        mExecStatus.set(true);
                         execCmd("reboot");
                     }else {
                         Log.d(TAG,"download Failed");
+                        mExecStatus.set(true);
+                        Factory.get().getDbManager().updateCmdState(rowId,DeviceCommand.MqttUpgradeCmdState.DOWNLOAD_FAILED);
                         downloadFile.delete();
                         item.setProgress(0);
                         item.setStatus(DownloadStatus.FAILED);
@@ -557,6 +667,8 @@ public class ExecCmdManager {
                     }
                 }else{
                     Log.e(TAG,"Download not completed....");
+                    mExecStatus.set(true);
+                    Factory.get().getDbManager().updateCmdState(rowId,DeviceCommand.MqttUpgradeCmdState.DOWNLOAD_NOT_COMPLETED);
                     item.setStatus(DownloadStatus.NONE);
                     response(token,deviceCode,productType,DeviceCommand.Upgrade.CODE,DeviceCommand.Upgrade.DOWNLOAD_NOT_COMPLETED,item.getVersion()+"版本下载未完成");
 
@@ -564,6 +676,9 @@ public class ExecCmdManager {
                     mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.DOWNLOAD_NOT_COMPLETED);
                     NotifyManager.getInstance().OnMqttSimpleCmdNotify(topic,mqttResponse);
                 }
+            }else {
+                mExecStatus.set(true);
+                Factory.get().getDbManager().updateCmdState(rowId,DeviceCommand.MqttUpgradeCmdState.ERROR);
             }
             Log.d(TAG,"X: done----->download status: "+item.getStatus());
         }
@@ -573,18 +688,22 @@ public class ExecCmdManager {
         final UpdateItem item;
         final String topic;
         final MqttResponse mqttResponse;
+        final long rowId;
 
-        public DownloadCallable(UpdateItem item,String topic,MqttResponse mqttResponse) {
+        public DownloadCallable(long rowId,UpdateItem item,String topic,MqttResponse mqttResponse) {
             this.item = item;
             this.topic = topic;
             this.mqttResponse = mqttResponse;
+            this.rowId = rowId;
         }
 
         @Override
         public UpdateItem call() throws Exception {
             String downloadUrl = item.getDownloadUrl();
-            Log.d(TAG,"E: call------>downloadUrl: "+downloadUrl);
-            if(TextUtils.isEmpty(downloadUrl)) return item;
+            Log.d(TAG,"E: call------>rowId: "+rowId+"   downloadUrl: "+downloadUrl);
+            if(TextUtils.isEmpty(downloadUrl)){
+                return item;
+            }
             String fileName = MD5Utils.md5sum(downloadUrl.getBytes());
             File DOWNLOAD_DIRECTORY = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
             if(!DOWNLOAD_DIRECTORY.exists()) DOWNLOAD_DIRECTORY.mkdirs();
@@ -592,7 +711,7 @@ public class ExecCmdManager {
             Log.d(TAG,"call----->path: "+downloadFile.getAbsolutePath());
             long startPos = downloadFile.length();
             long endPos = item.getFileSize();
-            Log.d(TAG,"call------>startPos: "+startPos+"    endPos:"+endPos);
+            Log.d(TAG,"call------>startPos: "+startPos+"    endPos:"+endPos+"   rowId: "+rowId);
             item.setProgress(startPos);
             item.setStatus(DownloadStatus.PAUSE);
             InputStream inStream = null;
@@ -622,6 +741,7 @@ public class ExecCmdManager {
                 int responseCode = http.getResponseCode();
                 Log.d(TAG,"call------>responseCode: "+responseCode);
                 if(responseCode >= 400){
+                    Factory.get().getDbManager().updateCmdState(rowId,DeviceCommand.MqttUpgradeCmdState.DOWNLOAD_FAILED);
                     item.setStatus(DownloadStatus.FAILED);
                     response(token,deviceCode,productType,DeviceCommand.Upgrade.CODE,DeviceCommand.Upgrade.DOWNLOAD_FAILED,item.getVersion()+"版本下载失败");
 
@@ -629,21 +749,20 @@ public class ExecCmdManager {
                     mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.DOWNLOAD_FAILED);
                     NotifyManager.getInstance().OnMqttSimpleCmdNotify(topic,mqttResponse);
                 }else{
-                    Log.d(TAG,"call------->200 start write data to file");
                     inStream = http.getInputStream();
                     byte[] buffer = new byte[1024];
                     long readSize = 0;
 
                     randomFile = new RandomAccessFile(downloadFile, "rwd");
                     randomFile.seek(startPos);
-
+                    Log.d(TAG,"call------->200 start write data to file  startPos: "+startPos+"   endPos: "+endPos);
                     long downloaded = startPos;
                     while ((readSize = inStream.read(buffer, 0, 1024)) != -1 && !Thread.currentThread().isInterrupted() && startPos<endPos) {
                         randomFile.write(buffer, 0, (int) readSize);
                         downloaded += readSize;
                         item.setProgress(downloaded);
                     }
-                    Log.d(TAG,"call-------> write data to file done !");
+                    Log.d(TAG,"call-------> write data to file done  downloaded: "+downloaded+"    endPos: "+endPos+"  progress: "+item.getProgress());
                 }
             }catch (Exception e){
                 e.printStackTrace();

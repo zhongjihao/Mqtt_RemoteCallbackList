@@ -41,5 +41,8 @@ public final class OpenPlatformPrefsKeys {
 
         String KEY_OPEN_MAINAPP_VERSION = "key_open_mainapp_version"; //主应用版本
         long KEY_OPEN_MAINAPP_VERSION_DEFAULT = 1;
+
+        String KEY_OPEN_MUCUNQIUE = "key_open_mucunqiue"; //MUC唯一号
+        String KEY_OPEN_MUCUNQIUE_DEFAULT = "";
     }
 }

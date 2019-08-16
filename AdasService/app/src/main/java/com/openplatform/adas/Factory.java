@@ -2,6 +2,8 @@ package com.openplatform.adas;
 
 import android.content.Context;
 
+import com.openplatform.adas.database.DBManager;
+import com.openplatform.adas.database.DataModel;
 import com.openplatform.adas.network.IHttpEngine;
 import com.openplatform.adas.util.AdasPrefs;
 import com.openplatform.adas.util.Assert;
@@ -33,4 +35,6 @@ public abstract class Factory {
     public abstract void onRequiredInit();
     public abstract IHttpEngine getHttpEngine();
     public abstract AdasPrefs getApplicationPrefs();
+    public abstract DataModel getDataModel();
+    public abstract DBManager getDbManager();
 }
