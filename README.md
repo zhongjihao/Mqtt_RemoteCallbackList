@@ -1,2 +1,3 @@
-# Mqtt_RemoteCallbackList
-Android中Mqtt实时消息以及通过RemoteCallbackList进行aidl回调
+本工程主要是Android下Mqtt和RemoteCallbackList在AIDL进程间通信的使用
+1 Android中Mqtt实时消息
+2 Android中AIDL进程间通信Remote Server端通过RemoteCallbackList进行回调到Client
