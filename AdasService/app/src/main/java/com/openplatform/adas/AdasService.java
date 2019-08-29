@@ -239,6 +239,39 @@ public class AdasService extends Service {
             }
 
             @Override
+            public void mqttTakePicEvent(String topic,MqttResponse mqttResponse,String batchNum,String channelId,int interval,int count,String distance,String minSpeed,int angle){
+                Log.d(TAG,"mqttTakePicEvent----->state: "+mqttResponse.getState());
+                String jsonResponse = new Gson().toJson(mqttResponse);
+                Log.d(TAG,"mqttTakePicEvent----recv cond takePic cmd------>jsonRequest: "+jsonResponse);
+                mqttService.publish(topic,jsonResponse,0);
+
+                if(mqttResponse.getState() == DeviceCommand.MqttTakePicCmd.CmdReceived){
+                    try {
+                        final int len = mRemoteCallbackList.beginBroadcast();
+                        Log.d(TAG,"mqttTakePicEvent---cond--beginBroadcast------>len: "+len);
+                        for (int i = 0; i < len; i++) {
+                            try {
+                                // 通知回调
+                                Log.d(TAG, "mqttTakePicEvent--cond takePic cmd---->channel: " + channelId+"  batchNum: "+batchNum+"  interval: "+interval+"  count: "+count);
+                                mRemoteCallbackList.getBroadcastItem(i).mqttCondTakePic(topic, mqttResponse.getDeviceId(), mqttResponse.getCmdSNO(), mqttResponse.getCommand(), batchNum, Integer.valueOf(channelId), interval, count, distance, minSpeed, angle);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }catch (Exception e){
+                        e.printStackTrace();
+                    }finally {
+                        try {
+                            mRemoteCallbackList.finishBroadcast();
+                            Log.d(TAG,"mqttTakePicEvent---cond takePic cmd------>finishBroadcast");
+                        }catch (Exception e){
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
+
+            @Override
             public void mqttSimpleCmdEvent(String topic,MqttResponse mqttResponse){
                 Log.d(TAG,"mqttSimpleCmdEvent");
                 String jsonResponse = new Gson().toJson(mqttResponse);
@@ -864,6 +897,129 @@ public class AdasService extends Service {
                     mqttService.publish(pTopic,jsonResponse,0);
                 }
             }, mToken, filePath));
+        }
+
+        @Override
+        public void OnCondTakePicUpload(String topic,String deviceId,String cmdSNO,String command,int channel,String batchNum,String filePath) throws RemoteException{
+            Log.d(TAG, "OnCondTakePicUpload----->topic: "+topic+",deviceId: "+deviceId+",cmdSNO: "+cmdSNO+",command: "+command+", channel: "+channel+", batchNum: "+batchNum+", filePath: "+filePath);
+            if(TextUtils.isEmpty(filePath)){
+                MqttResponse mqttResponse = new MqttResponse();
+                mqttResponse.setDeviceId(deviceId);
+                mqttResponse.setCmdSNO(cmdSNO);
+                mqttResponse.setCommand(command);
+                MqttResponse.Response takePictureResponse = new  MqttResponse.Response();
+                takePictureResponse.setFlag(true);
+                if(channel == 100){
+                    takePictureResponse.setMessage("车道拍照失败,文件未生成");
+                }else if(channel == 101){
+                    takePictureResponse.setMessage("人脸拍照失败,文件未生成");
+                }else if(channel == 3){
+                    takePictureResponse.setMessage("第三路拍照失败,文件未生成");
+                }
+                takePictureResponse.setData("");
+                mqttResponse.setResponse(takePictureResponse);
+                mqttResponse.setState(DeviceCommand.MqttTakePicCmd.FileFailed);
+                String jsonResponse = new Gson().toJson(mqttResponse);
+                Log.d(TAG,"OnCondTakePicUpload---->jsonRequest: "+jsonResponse);
+                mqttService.publish(topic,jsonResponse,0);
+                return;
+            }
+            final String pTopic = topic;
+            final String pdeviceId = deviceId;
+            final String pcmdSNO = cmdSNO;
+            final String pcommand = command;
+            final String pfilePath = filePath;
+            final int pchannel = channel;
+            mSyncEs.submit(new UploadFileTask(new ISuccessCallback() {
+                @Override
+                public void onSuccess(HashMap<String, String> result) {
+                    String body = result.get(IHttpEngine.KEY_BODY);
+                    Log.d(TAG,"OnCondTakePicUpload onSuccess---->body: "+body);
+                    try{
+                        DeviceUploadFileResponse response = new Gson().fromJson(body,DeviceUploadFileResponse.class);
+                        Log.d(TAG,"OnCondTakePicUpload onSuccess---->response: "+response.toString());
+
+                        MqttResponse mqttResponse = new MqttResponse();
+                        mqttResponse.setDeviceId(pdeviceId);
+                        mqttResponse.setCmdSNO(pcmdSNO);
+                        mqttResponse.setCommand(pcommand);
+                        MqttResponse.Response takePictureResponse = new  MqttResponse.Response();
+                        takePictureResponse.setFlag(true);
+                        if(pchannel == 100){
+                            takePictureResponse.setMessage("车道拍照成功,文件上传成功");
+                        }else if(pchannel == 101){
+                            takePictureResponse.setMessage("人脸拍照成功,文件上传成功");
+                        }else if(pchannel == 3){
+                            takePictureResponse.setMessage("第三路拍照成功,文件上传成功");
+                        }
+                        takePictureResponse.setData("");
+                        mqttResponse.setResponse(takePictureResponse);
+                        mqttResponse.setState(DeviceCommand.MqttTakePicCmd.FileUploadSuccess);
+                        String jsonResponse = new Gson().toJson(mqttResponse);
+                        Log.d(TAG,"OnCondTakePicUpload----->jsonRequest: "+jsonResponse);
+                        mqttService.publish(pTopic,jsonResponse,0);
+
+                        PutUpFileInfo putUpFileInfo = new PutUpFileInfo();
+                        PutUpFileInfo.Data[] fileList = new PutUpFileInfo.Data[1];
+                        fileList[0] = new PutUpFileInfo.Data();
+                        fileList[0].setCommandId(pcmdSNO);
+                        fileList[0].setFileUrl(response.getData().getUrl());
+                        String fileName = pfilePath.substring(pfilePath.lastIndexOf("/") + 1);
+                        fileList[0].setFileName(fileName);
+                        fileList[0].setChannelNo(pchannel);
+                        fileList[0].setFileType("1");
+                        putUpFileInfo.setDeviceCode(pdeviceId);
+                        putUpFileInfo.setConnectorType("1");
+                        putUpFileInfo.setFileList(fileList);
+
+                        fileInfoUploadEs.submit(new PutUpFileInfoTask(new ISuccessCallback() {
+                            @Override
+                            public void onSuccess(HashMap<String, String> result) {
+                                String body = result.get(IHttpEngine.KEY_BODY);
+                                Log.d(TAG, "PutUpFileInfo onSuccess---->body: " + body);
+                                try {
+                                    BaseResponse response = new Gson().fromJson(body, BaseResponse.class);
+                                    Log.d(TAG, "PutUpFileInfo onSuccess---->" + response.toString());
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }, new IFailCallback() {
+                            @Override
+                            public void onFail(int errorCode, String errorStr) {
+                                Log.e(TAG, "PutUpFileInfo  errorCode: " + errorCode + "   errorStr: " + errorStr);
+                            }
+                        }, mToken, putUpFileInfo));
+                    }catch (Exception e){
+                        e.printStackTrace();
+                    }
+                }
+            }, new IFailCallback() {
+                @Override
+                public void onFail(int errorCode, String errorStr) {
+                    Log.e(TAG,"OnCondTakePicUpload  errorCode: "+errorCode+"   errorStr: "+errorStr);
+
+                    MqttResponse mqttResponse = new MqttResponse();
+                    mqttResponse.setDeviceId(pdeviceId);
+                    mqttResponse.setCmdSNO(pcmdSNO);
+                    mqttResponse.setCommand(pcommand);
+                    MqttResponse.Response takePictureResponse = new  MqttResponse.Response();
+                    takePictureResponse.setFlag(true);
+                    if(pchannel == 100){
+                        takePictureResponse.setMessage("车道拍照成功,文件上传失败");
+                    }else if(pchannel == 101){
+                        takePictureResponse.setMessage("人脸拍照成功,文件上传失败");
+                    }else if(pchannel == 3){
+                        takePictureResponse.setMessage("第三路拍照成功,文件上传失败");
+                    }
+                    takePictureResponse.setData("");
+                    mqttResponse.setResponse(takePictureResponse);
+                    mqttResponse.setState(DeviceCommand.MqttTakePicCmd.FileUploadFailed);
+                    String jsonResponse = new Gson().toJson(mqttResponse);
+                    Log.d(TAG,"OnCondTakePicUpload------->jsonRequest: "+jsonResponse);
+                    mqttService.publish(pTopic,jsonResponse,0);
+                }
+            }, mToken, batchNum,filePath));
         }
 
     }

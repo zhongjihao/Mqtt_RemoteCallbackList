@@ -8,6 +8,7 @@ package com.openplatform.adas.datamodel;
  */
 public class PutUpFileInfo {
     private String deviceCode;
+    private String connectorType;
     private Data[] fileList;
 
     public PutUpFileInfo(){
@@ -20,6 +21,14 @@ public class PutUpFileInfo {
 
     public void setDeviceCode(String deviceCode) {
         this.deviceCode = deviceCode;
+    }
+
+    public String getConnectorType() {
+        return connectorType;
+    }
+
+    public void setConnectorType(String connectorType) {
+        this.connectorType = connectorType;
     }
 
     public Data[] getFileList() {
@@ -102,6 +111,6 @@ public class PutUpFileInfo {
         }
 
         return "PutUpFileInfo[ deviceCode= "+deviceCode
-                +", fileList=["+dataStr+"]  ]";
+                +", connectorType= "+connectorType+", fileList=["+dataStr+"]  ]";
     }
 }

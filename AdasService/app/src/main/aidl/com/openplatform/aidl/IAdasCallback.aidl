@@ -26,4 +26,7 @@ interface IAdasCallback {
 
    //自检指令
    void mqttDeviceDetect(String topic,String deviceId,String cmdSNO,String command);
+
+   //拍照
+   void mqttCondTakePic(String topic,String deviceId,String cmdSNO,String command,String batchNum,int channelId,int interval,int count,String distance,String minSpeed,int angle);
 }

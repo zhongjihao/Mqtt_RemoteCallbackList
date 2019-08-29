@@ -15,4 +15,5 @@ public interface INotifyCallback {
     void serverParamCallback(ServerParamDownloadResponse response);
     void mqttTakePicEvent(String topic,MqttResponse mqttResponse, String[] cameraIds);
     void mqttSimpleCmdEvent(String topic,MqttResponse mqttResponse);
+    void mqttTakePicEvent(String topic,MqttResponse mqttResponse,String batchNum,String channelId,int interval,int count,String distance,String minSpeed,int angle);
 }

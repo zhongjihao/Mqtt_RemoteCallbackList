@@ -5,9 +5,11 @@ import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.google.gson.GsonBuilder;
 import com.openplatform.adas.Factory;
 import com.openplatform.adas.constant.DeviceCommand;
 import com.openplatform.adas.constant.UrlConstant;
+import com.openplatform.adas.datamodel.CondTakePicData;
 import com.openplatform.adas.datamodel.MqttResponse;
 import com.openplatform.adas.datamodel.UpdateItem;
 import com.openplatform.adas.datamodel.UpdateItem.DownloadStatus;
@@ -20,6 +22,7 @@ import com.openplatform.adas.util.AdasPrefs;
 import com.openplatform.adas.util.Assert;
 import com.openplatform.adas.util.FileUtil;
 import com.openplatform.adas.util.FileUtil.Storage;
+import com.openplatform.adas.util.GsonTypeAdapterFactory;
 import com.openplatform.adas.util.MD5Utils;
 import com.openplatform.adas.util.OpenPlatformPrefsKeys;
 import com.openplatform.adas.util.ShellUtils;
@@ -134,7 +137,56 @@ public class ExecCmdManager {
 
                     NotifyManager.getInstance().OnMqttTakePicNotify(command,mqttResponse,cameraIds);
                 }
-            }else if(command.equalsIgnoreCase("reboot")){
+            } else if(command.equalsIgnoreCase("CondTakePictures")){
+                String data = "cond拍照指令data数据错误";
+                try {
+                    Gson gson = new GsonBuilder().registerTypeAdapterFactory(new GsonTypeAdapterFactory()).create();
+                    CondTakePicData condTakePicData = gson.fromJson(jsonCmdMsg.getString("data"),CondTakePicData.class);
+                    //data = jsonCmdMsg.getString("data");
+                    Log.d(TAG,"processEvent---1--cond takePic cmd---->condTakePicData: "+condTakePicData.toString());
+//                    JSONObject jsonObject = new JSONObject(data);
+//                    String batchNum = jsonObject.getString("batchNum");
+//                    String channelId = jsonObject.getString("channelId");
+//                    int interval = jsonObject.getInt("interval");
+//                    int count = jsonObject.getInt("count");
+
+                    String batchNum = condTakePicData.getBatchNum();
+                    String channelId = condTakePicData.getChannelId();
+                    int interval = condTakePicData.getInterval();
+                    int count = condTakePicData.getCount();
+
+                    String distance = condTakePicData.getDistance();
+                    String minSpeed = condTakePicData.getMinSpeed();
+                    int angle = condTakePicData.getAngle();
+                    Log.d(TAG,"processEvent---2---cond takePic cmd---->batchNum: "+batchNum+" channelId: "+channelId+" interval: "+interval+" count: "+count+" distance: "+distance+"   minSpeed: "+minSpeed+"   angle: "+angle);
+                    MqttResponse mqttResponse = new MqttResponse();
+                    mqttResponse.setDeviceId(deviceId);
+                    mqttResponse.setCmdSNO(cmdSNO);
+                    mqttResponse.setCommand(command);
+                    MqttResponse.Response takePictureResponse = new MqttResponse.Response();
+                    takePictureResponse.setFlag(true);
+                    takePictureResponse.setMessage("收到拍照指令");
+                    takePictureResponse.setData("");
+                    mqttResponse.setResponse(takePictureResponse);
+                    mqttResponse.setState(DeviceCommand.MqttTakePicCmd.CmdReceived);
+
+                    NotifyManager.getInstance().OnMqttTakePicNotify(command, mqttResponse, batchNum, channelId, interval, count, distance, minSpeed, angle);
+                }catch(Exception e){
+                    e.printStackTrace();
+                    MqttResponse mqttResponse = new MqttResponse();
+                    mqttResponse.setDeviceId(deviceId);
+                    mqttResponse.setCmdSNO(cmdSNO);
+                    mqttResponse.setCommand(command);
+                    MqttResponse.Response takePictureResponse = new MqttResponse.Response();
+                    takePictureResponse.setFlag(true);
+                    takePictureResponse.setMessage(data);
+                    takePictureResponse.setData("");
+                    mqttResponse.setResponse(takePictureResponse);
+                    mqttResponse.setState(DeviceCommand.MqttTakePicCmd.DateError);
+                    NotifyManager.getInstance().OnMqttTakePicNotify(command,mqttResponse,null, null, 0, 0, null, null, 0);
+                    return;
+                }
+            } else if(command.equalsIgnoreCase("reboot")){
                 Log.d(TAG,"processEvent-----reboot cmd");
                 MqttResponse mqttResponse = new MqttResponse();
                 mqttResponse.setDeviceId(deviceId);

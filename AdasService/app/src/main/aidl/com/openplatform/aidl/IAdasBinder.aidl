@@ -26,4 +26,7 @@ interface IAdasBinder {
 
     //拍照上传
     void OnTakePicUpload(String topic,String deviceId,String cmdSNO,String command,int channel,String filePath);
+
+    //拍照上传
+    void OnCondTakePicUpload(String topic,String deviceId,String cmdSNO,String command,int channel,String batchNum,String filePath);
 }

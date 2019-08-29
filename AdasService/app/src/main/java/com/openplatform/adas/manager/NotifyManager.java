@@ -64,4 +64,10 @@ public class NotifyManager {
             listener.mqttSimpleCmdEvent(topic,mqttResponse);
         }
     }
+
+    public void OnMqttTakePicNotify(String topic,MqttResponse mqttResponse, String batchNum,String channelId,int interval,int count,String distance,String minSpeed,int angle) {
+        for (INotifyCallback listener : notifyListeners) {
+            listener.mqttTakePicEvent(topic,mqttResponse, batchNum, channelId, interval, count, distance, minSpeed, angle);
+        }
+    }
 }

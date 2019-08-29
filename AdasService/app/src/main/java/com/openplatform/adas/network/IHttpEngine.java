@@ -14,6 +14,7 @@ public interface IHttpEngine {
     void OnPostRequest(String url, String token,String jsonRequest, ISuccessCallback iSuccessCallback, IFailCallback iFailCallback);
     void OnGetRequest(String url,String token,String jsonRequest,ISuccessCallback iSuccessCallback,IFailCallback iFailCallback);
     void OnUploadFile(String url, String token,String filePath, ISuccessCallback iSuccessCallback, IFailCallback iFailCallback);
+    void OnUploadFile(String url, String token,String batchNum,String filePath, ISuccessCallback iSuccessCallback, IFailCallback iFailCallback);
 
     interface ISuccessCallback {
         void onSuccess(HashMap<String, String> result);
