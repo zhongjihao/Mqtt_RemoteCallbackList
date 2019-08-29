@@ -1,0 +1,4 @@
+#Thu Aug 29 18:25:53 CST 2019
+base.0=/home/zhongjihao/workspace/sprd/AndroidMqttAidlDemo/MqttAidl/app/build/intermediates/transforms/dexMerger/MQTT_AIDL_APP/release/0
+path.0=classes.dex
+renamed.0=classes.dex
