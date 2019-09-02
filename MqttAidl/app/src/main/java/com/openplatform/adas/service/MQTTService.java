@@ -11,23 +11,17 @@ import android.os.Process;
 import android.text.TextUtils;
 import android.util.Log;
 
-import com.google.gson.Gson;
+
 import com.openplatform.adas.Factory;
 import com.openplatform.adas.constant.DeviceCommand;
-import com.openplatform.adas.constant.UrlConstant;
 import com.openplatform.adas.datamodel.Command;
 import com.openplatform.adas.datamodel.MqttResponse;
 import com.openplatform.adas.datamodel.UpdateItem;
 import com.openplatform.adas.manager.ExecCmdManager;
-import com.openplatform.adas.manager.NotifyManager;
 import com.openplatform.adas.manager.UpgradeManager;
-import com.openplatform.adas.network.IHttpEngine.ISuccessCallback;
-import com.openplatform.adas.network.IHttpEngine.IFailCallback;
-import com.openplatform.adas.network.IHttpEngine;
 import com.openplatform.adas.util.AdasPrefs;
 import com.openplatform.adas.util.NetUtil;
 import com.openplatform.adas.util.OpenPlatformPrefsKeys;
-import com.openplatform.aidl.DownUpgradeInfo;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
@@ -37,10 +31,8 @@ import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.json.JSONException;
-import org.json.JSONObject;
 
-import java.util.HashMap;
+
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -363,58 +355,19 @@ public class MQTTService extends Service {
                                         mqttResponse.setResponse(response);
                                         mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.CmdReceived);
 
-                                        final String token = Factory.get().getApplicationPrefs().getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_TOKEN, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_TOKEN_DEFAULT);
-                                        final String deviceCode = Factory.get().getApplicationPrefs().getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_DEVICECODE_DEFAULT);
-                                        final String productType = Factory.get().getApplicationPrefs().getString(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_PRODUCTTYPE, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_PRODUCTTYPE_DEFAULT);
-                                        Log.d(TAG, "handleMessage---upgrade---->deviceCode: " + deviceCode + "  productType: " + productType + "  rowId: " + rowId);
-                                        try {
-                                            JSONObject object = new JSONObject();
-                                            object.put("deviceCode", deviceCode);
-                                            object.put("productType", productType);
-                                            Factory.get().getHttpEngine().OnPostRequest(UrlConstant.DOWN_UPGRADEINFO_URL, token, object.toString(),
-                                                    new ISuccessCallback() {
-                                                        @Override
-                                                        public void onSuccess(HashMap<String, String> result) {
-                                                            String body = result.get(IHttpEngine.KEY_BODY);
-                                                            Log.d(TAG, "handleMessage---OnDownUpgradeInfo onSuccess---->body: " + body);
-                                                            try {
-                                                                DownUpgradeInfo response = new Gson().fromJson(body, DownUpgradeInfo.class);
-                                                                Log.d(TAG, "handleMessage---OnDownUpgradeInfo onSuccess---->response: " + response.toString());
-                                                                if (response.getData() != null && response.getData().length > 0) {
-                                                                    for (DownUpgradeInfo.Data upgrade : response.getData()) {
-                                                                        if (upgrade.getApkType().equalsIgnoreCase(DeviceCommand.Upgrade.UpgradeApp.MAIN_APP)) {//主应用Adas
-                                                                            long versionCode = Factory.get().getApplicationPrefs().getLong(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAINAPP_VERSION, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAINAPP_VERSION_DEFAULT);
-                                                                            Log.d(TAG, "handleMessage---OnDownUpgradeInfo-----upgrade main app, remote version: " + upgrade.getDeviceVersion() + "  local version: " + versionCode + "  rowId: " + rowId);
-                                                                            if (versionCode != upgrade.getDeviceVersion()) {
-                                                                                UpdateItem item = new UpdateItem();
-                                                                                item.setDownloadUrl(upgrade.getFileFullName());
-                                                                                item.setFileSize(upgrade.getFileSize());
-                                                                                item.setFileMd5(upgrade.getFileMd5());
-                                                                                item.setVersion(upgrade.getDeviceVersion());
-                                                                                UpgradeManager.getInstance().download(rowId, item, command.getCommand(), mqttResponse);
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            } catch (Exception e) {
-                                                                e.printStackTrace();
-                                                                Factory.get().getDbManager().updateCmdState(rowId, DeviceCommand.MqttUpgradeCmdState.ERROR);
-                                                            }
-                                                        }
-                                                    }, new IFailCallback() {
-                                                        @Override
-                                                        public void onFail(int errorCode, String errorStr) {
-                                                            Log.e(TAG, "handleMessage---OnDownUpgradeInfo  errorCode: " + errorCode + "   errorStr: " + errorStr + "  rowId: " + rowId);
-                                                            Factory.get().getDbManager().updateCmdState(rowId, DeviceCommand.MqttUpgradeCmdState.ERROR);
-                                                            UpgradeManager.getInstance().response(token, deviceCode, productType, DeviceCommand.Upgrade.CODE, DeviceCommand.Upgrade.UPGRADE_FAILED, "获取升级参数失败");
+                                        Log.d(TAG, "handleMessage---upgrade---->rowId: " + rowId);
 
-                                                            mqttResponse.setState(DeviceCommand.MqttUpgradeCmdState.UPGRADE_FAILED);
-                                                            ((MqttResponse.Response) (mqttResponse.getResponse())).setMessage("获取升级参数失败");
-                                                            NotifyManager.getInstance().OnMqttSimpleCmdNotify(command.getCommand(), mqttResponse);
-                                                        }
-                                                    });
-                                        } catch (JSONException e) {
-                                            e.printStackTrace();
+                                        UpdateItem item = Factory.get().getDbManager().queryUpgradeInfo(rowId);
+                                        if(item != null){
+                                            if (DeviceCommand.Upgrade.UpgradeApp.MAIN_APP.equalsIgnoreCase(item.getApkType())) {//主应用Adas
+                                                long versionCode = Factory.get().getApplicationPrefs().getLong(OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAINAPP_VERSION, OpenPlatformPrefsKeys.AdasParamKey.KEY_OPEN_MAINAPP_VERSION_DEFAULT);
+                                                Log.d(TAG, "handleMessage---OnDownUpgradeInfo-----upgrade main app, remote version: " + item.getVersion() + "  local version: " + versionCode + "  rowId: " + rowId);
+                                                if (versionCode != item.getVersion()) {
+                                                    UpgradeManager.getInstance().download(rowId, item, command.getCommand(), mqttResponse);
+                                                }
+                                            }
+                                        }else {
+                                            Log.e(TAG,"query upgrade is null ,commandId: "+rowId);
                                         }
 
                                         Message message = Message.obtain();

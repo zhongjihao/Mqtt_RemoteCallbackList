@@ -8,7 +8,7 @@ android {
         def date = new Date()
         def formattedDate = date.format('yyMMddHHmm')
         applicationId "com.openplatform.adas"
-        versionCode 209
+        versionCode 210
         setProperty("archivesBaseName", "v2.3.$versionCode.$formattedDate")
         minSdkVersion 22
         targetSdkVersion 28

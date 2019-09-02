@@ -142,14 +142,7 @@ public class ExecCmdManager {
                 try {
                     Gson gson = new GsonBuilder().registerTypeAdapterFactory(new GsonTypeAdapterFactory()).create();
                     CondTakePicData condTakePicData = gson.fromJson(jsonCmdMsg.getString("data"),CondTakePicData.class);
-                    //data = jsonCmdMsg.getString("data");
                     Log.d(TAG,"processEvent---1--cond takePic cmd---->condTakePicData: "+condTakePicData.toString());
-//                    JSONObject jsonObject = new JSONObject(data);
-//                    String batchNum = jsonObject.getString("batchNum");
-//                    String channelId = jsonObject.getString("channelId");
-//                    int interval = jsonObject.getInt("interval");
-//                    int count = jsonObject.getInt("count");
-
                     String batchNum = condTakePicData.getBatchNum();
                     String channelId = condTakePicData.getChannelId();
                     int interval = condTakePicData.getInterval();
@@ -428,6 +421,7 @@ public class ExecCmdManager {
                                                         item.setFileSize(upgrade.getFileSize());
                                                         item.setFileMd5(upgrade.getFileMd5());
                                                         item.setVersion(upgrade.getDeviceVersion());
+                                                        Factory.get().getDbManager().updateUpgradeTable(rowId,upgrade.getApkType(),upgrade.getDeviceVersion(),upgrade.getFileSize(),upgrade.getFileMd5(),upgrade.getFileFullName());
                                                         download(rowId,item,command,mqttResponse);
                                                     }else {
                                                         mExecStatus.set(true);
@@ -547,6 +541,7 @@ public class ExecCmdManager {
                                                 item.setFileSize(upgrade.getFileSize());
                                                 item.setFileMd5(upgrade.getFileMd5());
                                                 item.setVersion(upgrade.getDeviceVersion());
+                                                Factory.get().getDbManager().updateUpgradeTable(rowId,upgrade.getApkType(),upgrade.getDeviceVersion(),upgrade.getFileSize(),upgrade.getFileMd5(),upgrade.getFileFullName());
                                                 download(rowId,item,command,mqttResponse);
                                             }else {
                                                 mExecStatus.set(true);

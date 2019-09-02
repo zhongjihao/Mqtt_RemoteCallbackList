@@ -4,8 +4,10 @@ package com.openplatform.adas.database;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.util.Log;
 
 import com.openplatform.adas.datamodel.Command;
+import com.openplatform.adas.datamodel.UpdateItem;
 import com.openplatform.adas.util.Assert;
 import com.openplatform.adas.util.Assert.DoesNotRunOnMainThread;
 
@@ -140,5 +142,50 @@ public class DBManager{
 		}
 
 		return list;
+	}
+
+	@DoesNotRunOnMainThread
+	public int updateUpgradeTable(long commandId,String apkType,long deviceVersion,long fileSize,String fileMd5,String downloadUrl){
+		Assert.isNotMainThread();
+		ContentValues contentValues = new ContentValues();
+		contentValues.put(UpgradeInfoTableColumns.APKTYPE, apkType);
+		contentValues.put(UpgradeInfoTableColumns.DEVICEVERSION, deviceVersion);
+		contentValues.put(UpgradeInfoTableColumns.FILESIZE, fileSize);
+		contentValues.put(UpgradeInfoTableColumns.FILEMD5, fileMd5);
+		contentValues.put(UpgradeInfoTableColumns.DOWNLOADURL, downloadUrl);
+		int rowNum = -1;
+		final DatabaseWrapper db = DataModel.get().getDatabase();
+		rowNum = db.update(DBHelper.UPGRADE_TABLE,contentValues,UpgradeInfoTableColumns.COMMANDID+"=?", new String[]{String.valueOf(commandId)});
+		return rowNum;
+	}
+
+	@DoesNotRunOnMainThread
+	public UpdateItem queryUpgradeInfo(long commandId){
+		Log.d(TAG,"E: queryUpgradeInfo------>commandId: "+commandId);
+		Assert.isNotMainThread();
+		String selection = String.format("%s=?", UpgradeInfoTableColumns.COMMANDID);
+		String[] selectionArgs = new String[]{ String.valueOf(commandId)};
+		Cursor cursor = null;
+		UpdateItem item  = null;
+		final DatabaseWrapper db = DataModel.get().getDatabase();
+		try {
+			cursor = db.query(DBHelper.UPGRADE_TABLE, null, selection, selectionArgs, null, null, null);
+			if (cursor.moveToNext()) {
+				item  = new UpdateItem();
+				item.setApkType(cursor.getString(cursor.getColumnIndex(UpgradeInfoTableColumns.APKTYPE)));
+				item.setVersion(cursor.getInt(cursor.getColumnIndex(UpgradeInfoTableColumns.DEVICEVERSION)));
+				item.setFileSize(cursor.getInt(cursor.getColumnIndex(UpgradeInfoTableColumns.FILESIZE)));
+				item.setFileMd5(cursor.getString(cursor.getColumnIndex(UpgradeInfoTableColumns.FILEMD5)));
+				item.setDownloadUrl(cursor.getString(cursor.getColumnIndex(UpgradeInfoTableColumns.DOWNLOADURL)));
+				Log.d(TAG,"queryUpgradeInfo------>commandId: "+commandId+"  apkType: "+item.getApkType()+"  version: "+item.getVersion()+"  size: "+item.getFileSize()+" md5: "+item.getFileMd5()+"  url: "+item.getDownloadUrl());
+			}
+		}catch (Exception e){
+			e.printStackTrace();
+		} finally {
+			if(cursor != null)
+				cursor.close();
+		}
+		Log.d(TAG,"X: queryUpgradeInfo------>commandId: "+commandId);
+		return item;
 	}
 }

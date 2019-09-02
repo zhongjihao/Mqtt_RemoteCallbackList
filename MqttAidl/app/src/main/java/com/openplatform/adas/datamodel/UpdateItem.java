@@ -10,7 +10,7 @@ import java.io.Serializable;
  */
 public class UpdateItem implements Serializable {
     private static final long serialVersionUID = 1L;
-
+    private String apkType;
     private long fileSize;
     private String fileMd5;
     private String downloadUrl;
@@ -20,6 +20,14 @@ public class UpdateItem implements Serializable {
 
     public enum DownloadStatus{
         NONE,WAITE,PAUSE,FAILED,CHECK,INSTALL,COMPLETE
+    }
+
+    public String getApkType() {
+        return apkType;
+    }
+
+    public void setApkType(String apkType) {
+        this.apkType = apkType;
     }
 
     public long getFileSize() {
@@ -73,7 +81,8 @@ public class UpdateItem implements Serializable {
     @Override
     public String toString() {
         return "UpdateItem ["
-                +"fileSize=" + fileSize + ", fileMd5=" + fileMd5
+                +"apkType=" +apkType
+                +", fileSize=" + fileSize + ", fileMd5=" + fileMd5
                 + ", downloadUrl=" + downloadUrl
                 + ", progress=" + progress
                 + ", version=" + version
