@@ -1,9 +1,9 @@
-AdasService/AdasService.iml
-AdasService/local.properties
-AdasService/build/
-AdasService/.gradle/
-AdasService/.idea/
-AdasService/app/build/
-AdasService/app/app.iml
+MqttAidl/AdasService.iml
+MqttAidl/local.properties
+MqttAidl/build/
+MqttAidl/.gradle/
+MqttAidl/.idea/
+MqttAidl/app/build/
+MqttAidl/app/app.iml
 
 
