@@ -16,6 +16,7 @@ import com.openplatform.adas.constant.DeviceCommand;
 import com.openplatform.adas.constant.UrlConstant;
 import com.openplatform.adas.datamodel.CameraState;
 import com.openplatform.adas.datamodel.DeviceUploadFileResponse;
+import com.openplatform.adas.datamodel.MqttParamResponse;
 import com.openplatform.adas.datamodel.MqttResponse;
 import com.openplatform.adas.datamodel.PutUpFileInfo;
 import com.openplatform.adas.network.IHttpEngine;
@@ -26,6 +27,7 @@ import com.openplatform.adas.datamodel.BaseResponse;
 import com.openplatform.adas.datamodel.LoginResponse;
 import com.openplatform.adas.interfacemanager.INotifyCallback;
 import com.openplatform.adas.manager.NotifyManager;
+import com.openplatform.adas.receiver.SMSBroadcastReceiver;
 import com.openplatform.adas.service.MQTTService;
 import com.openplatform.adas.task.CheckSimByIccidTask;
 import com.openplatform.adas.task.LoginTask;
@@ -39,6 +41,7 @@ import com.openplatform.adas.threadpool.NameThreadFactory;
 import com.openplatform.adas.util.AdasPrefs;
 import com.openplatform.adas.util.NetUtil;
 import com.openplatform.adas.util.OpenPlatformPrefsKeys;
+import com.openplatform.aidl.CmdMesage;
 import com.openplatform.aidl.IAdasBinder;
 import com.openplatform.aidl.IAdasCallback;
 import com.openplatform.aidl.LoginRequest;
@@ -50,6 +53,7 @@ import com.openplatform.aidl.TerminalParamDownloadResponse;
 
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -299,6 +303,88 @@ public class AdasService extends Service {
                         }catch (Exception e){
                             e.printStackTrace();
                         }
+                    }
+                }
+            }
+
+            @Override
+            public void mqttParamCmdEvent(String topic, MqttParamResponse mqttResponse, List<CmdMesage> list){
+                Log.d(TAG,"mqttParamCmdEvent");
+                String jsonResponse = new Gson().toJson(mqttResponse);
+                Log.d(TAG,"mqttParamCmdEvent----recv cmd------>jsonRequest: "+jsonResponse);
+                mqttService.publish(topic,jsonResponse,0);
+
+                if(list != null){
+                    if(mqttResponse.getCommand().equalsIgnoreCase("TerminalParamArray")){
+                        try {
+                            final int len = mRemoteCallbackList.beginBroadcast();
+                            Log.d(TAG,"mqttParamCmdEvent----TerminalParam cmd---->callback num: "+len+"   token: "+mToken);
+                            for (int i = 0; i < len; i++) {
+                                try {
+                                    // 通知回调
+                                    mRemoteCallbackList.getBroadcastItem(i).mqttParamCmd(topic,mqttResponse.getDeviceId(),mqttResponse.getCmdSNO(),mqttResponse.getCommand(),list);
+                                } catch (RemoteException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }catch (Exception e){
+                            e.printStackTrace();
+                        }finally {
+                            try {
+                                mRemoteCallbackList.finishBroadcast();
+                                Log.d(TAG,"mqttParamCmdEvent----TerminalParam cmd------>finishBroadcast");
+                            }catch (Exception e){
+                                e.printStackTrace();
+                            }
+                        }
+                    }else if(mqttResponse.getCommand().equalsIgnoreCase("TerminalParamArrayUpdate")){
+                        try {
+                            final int len = mRemoteCallbackList.beginBroadcast();
+                            Log.d(TAG,"mqttParamCmdEvent----TerminalParamUpdate cmd---->callback num: "+len+"   token: "+mToken);
+                            for (int i = 0; i < len; i++) {
+                                try {
+                                    // 通知回调
+                                    mRemoteCallbackList.getBroadcastItem(i).mqttParamCmd(topic,mqttResponse.getDeviceId(),mqttResponse.getCmdSNO(),mqttResponse.getCommand(),list);
+                                } catch (RemoteException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        }catch (Exception e){
+                            e.printStackTrace();
+                        }finally {
+                            try {
+                                mRemoteCallbackList.finishBroadcast();
+                                Log.d(TAG,"mqttParamCmdEvent----TerminalParamUpdate cmd------>finishBroadcast");
+                            }catch (Exception e){
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public void smsParamCmdEvent(String phone,List<CmdMesage> list){
+                Log.d(TAG,"smsParamCmdEvent----->phone: "+phone);
+                try {
+                    final int len = mRemoteCallbackList.beginBroadcast();
+                    Log.d(TAG,"smsParamCmdEvent----TerminalParam cmd---->callback num: "+len+"   token: "+mToken);
+                    for (int i = 0; i < len; i++) {
+                        try {
+                            // 通知回调
+                            mRemoteCallbackList.getBroadcastItem(i).smsParamCmd(phone,list);
+                        } catch (RemoteException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }catch (Exception e){
+                    e.printStackTrace();
+                }finally {
+                    try {
+                        mRemoteCallbackList.finishBroadcast();
+                        Log.d(TAG,"smsParamCmdEvent----TerminalParam cmd------>finishBroadcast");
+                    }catch (Exception e){
+                        e.printStackTrace();
                     }
                 }
             }
@@ -1020,6 +1106,44 @@ public class AdasService extends Service {
                     mqttService.publish(pTopic,jsonResponse,0);
                 }
             }, mToken, batchNum,filePath));
+        }
+
+        @Override
+        public void OnParam(String topic,String deviceId,String cmdSNO,String command,String[] result){
+            Log.d(TAG, "OnParam----->topic: "+topic+",deviceId: "+deviceId+",cmdSNO: "+cmdSNO+",command: "+command+", result: "+result);
+            MqttParamResponse mqttResponse = new MqttParamResponse();
+            mqttResponse.setDeviceId(deviceId);
+            mqttResponse.setCmdSNO(cmdSNO);
+            mqttResponse.setCommand(command);
+            MqttParamResponse.Response response = new MqttParamResponse.Response();
+            response.setFlag(true);
+            MqttParamResponse.Data data = new MqttParamResponse.Data();
+            if(result != null){
+                response.setMessage(String.format("%s指令执行成功",command));
+                data.setResults(result);
+                mqttResponse.setState(DeviceCommand.MqttCmdState.CmdExecuted);
+            }else {
+                response.setMessage(String.format("%s指令执行失败",command));
+                data.setResults(null);
+                mqttResponse.setState(DeviceCommand.MqttCmdState.CmdExecuted_Failed);
+            }
+
+            response.setData(data);
+            mqttResponse.setResponse(response);
+            String jsonResponse = new Gson().toJson(mqttResponse);
+            Log.d(TAG,"OnParam------>jsonRequest: "+jsonResponse);
+            mqttService.publish(topic,jsonResponse,0);
+        }
+
+        @Override
+        public  void OnSmsParam(String phone,String[] result){
+            StringBuffer msgBuffer = new StringBuffer();
+            for(int i=0;i<result.length;i++){
+                msgBuffer.append(result[i]);
+            }
+            String msg = msgBuffer.toString();
+            Log.d(TAG, "OnSmsParam----->phone: "+phone+", msg: "+msg);
+            SMSBroadcastReceiver.sendMessage(phone,msg);
         }
 
     }

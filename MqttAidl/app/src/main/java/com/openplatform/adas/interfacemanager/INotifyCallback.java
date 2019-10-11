@@ -1,8 +1,12 @@
 package com.openplatform.adas.interfacemanager;
 
+import com.openplatform.adas.datamodel.MqttParamResponse;
 import com.openplatform.adas.datamodel.MqttResponse;
+import com.openplatform.aidl.CmdMesage;
 import com.openplatform.aidl.ServerParamDownloadResponse;
 import com.openplatform.aidl.TerminalParamDownloadResponse;
+
+import java.util.List;
 
 /**
  * Author : ZhongJiHao
@@ -16,4 +20,6 @@ public interface INotifyCallback {
     void mqttTakePicEvent(String topic,MqttResponse mqttResponse, String[] cameraIds);
     void mqttSimpleCmdEvent(String topic,MqttResponse mqttResponse);
     void mqttTakePicEvent(String topic,MqttResponse mqttResponse,String batchNum,String channelId,int interval,int count,String distance,String minSpeed,int angle);
+    void mqttParamCmdEvent(String topic, MqttParamResponse mqttResponse, List<CmdMesage> list);
+    void smsParamCmdEvent(String phone,List<CmdMesage> list);
 }

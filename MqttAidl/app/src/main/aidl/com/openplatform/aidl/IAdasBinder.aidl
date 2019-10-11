@@ -27,6 +27,12 @@ interface IAdasBinder {
     //拍照上传
     void OnTakePicUpload(String topic,String deviceId,String cmdSNO,String command,int channel,String filePath);
 
-    //拍照上传
+    //条件拍照上传
     void OnCondTakePicUpload(String topic,String deviceId,String cmdSNO,String command,int channel,String batchNum,String filePath);
+
+    //mqtt指令操作参数
+    void OnParam(String topic,String deviceId,String cmdSNO,String command,in String[] result);
+
+    //短信指令操作参数
+    void OnSmsParam(String phone,in String[] result);
 }

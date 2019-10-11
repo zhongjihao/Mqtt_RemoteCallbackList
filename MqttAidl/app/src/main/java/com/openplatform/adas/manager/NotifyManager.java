@@ -1,11 +1,14 @@
 package com.openplatform.adas.manager;
 
 
+import com.openplatform.adas.datamodel.MqttParamResponse;
 import com.openplatform.adas.datamodel.MqttResponse;
 import com.openplatform.adas.interfacemanager.INotifyCallback;
+import com.openplatform.aidl.CmdMesage;
 import com.openplatform.aidl.ServerParamDownloadResponse;
 import com.openplatform.aidl.TerminalParamDownloadResponse;
 
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -68,6 +71,18 @@ public class NotifyManager {
     public void OnMqttTakePicNotify(String topic,MqttResponse mqttResponse, String batchNum,String channelId,int interval,int count,String distance,String minSpeed,int angle) {
         for (INotifyCallback listener : notifyListeners) {
             listener.mqttTakePicEvent(topic,mqttResponse, batchNum, channelId, interval, count, distance, minSpeed, angle);
+        }
+    }
+
+    public void OnMqttParamCmdNotify(String topic, MqttParamResponse mqttResponse, List<CmdMesage> list) {
+        for (INotifyCallback listener : notifyListeners) {
+            listener.mqttParamCmdEvent(topic,mqttResponse,list);
+        }
+    }
+
+    public void OnSmsCmdNotify(String phone,List<CmdMesage> list) {
+        for (INotifyCallback listener : notifyListeners) {
+            listener.smsParamCmdEvent(phone,list);
         }
     }
 }

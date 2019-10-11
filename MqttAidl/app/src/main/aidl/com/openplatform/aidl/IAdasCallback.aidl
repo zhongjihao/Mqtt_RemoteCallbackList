@@ -3,6 +3,7 @@ package com.openplatform.aidl;
 
 import com.openplatform.aidl.TerminalParamDownloadResponse;
 import com.openplatform.aidl.ServerParamDownloadResponse;
+import com.openplatform.aidl.CmdMesage;
 
 /**
  * Author : ZhongJiHao
@@ -27,6 +28,12 @@ interface IAdasCallback {
    //自检指令
    void mqttDeviceDetect(String topic,String deviceId,String cmdSNO,String command);
 
-   //拍照
+   //条件拍照
    void mqttCondTakePic(String topic,String deviceId,String cmdSNO,String command,String batchNum,int channelId,int interval,int count,String distance,String minSpeed,int angle);
+
+   //mqtt参数指令
+   void mqttParamCmd(String topic,String deviceId,String cmdSNO,String command,in List<CmdMesage> cmdList);
+
+   //短信参数指令
+   void smsParamCmd(String phone,in List<CmdMesage> cmdList);
 }

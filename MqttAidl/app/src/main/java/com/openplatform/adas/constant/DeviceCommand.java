@@ -36,6 +36,7 @@ public interface DeviceCommand {
     interface MqttCmdState {
         int CmdReceived = 1; //指令已接收
         int CmdExecuted = 2; //指令已执行
+        int CmdExecuted_Failed = 3;
     }
 
     interface MqttUpgradeCmdState {

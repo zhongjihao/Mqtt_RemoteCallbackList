@@ -10,9 +10,12 @@ import com.openplatform.adas.Factory;
 import com.openplatform.adas.constant.DeviceCommand;
 import com.openplatform.adas.constant.UrlConstant;
 import com.openplatform.adas.datamodel.CondTakePicData;
+import com.openplatform.adas.datamodel.MqttParamResponse;
 import com.openplatform.adas.datamodel.MqttResponse;
+import com.openplatform.adas.datamodel.SmsMessege;
 import com.openplatform.adas.datamodel.UpdateItem;
 import com.openplatform.adas.datamodel.UpdateItem.DownloadStatus;
+import com.openplatform.adas.interfacemanager.IOnCmdMessageProc;
 import com.openplatform.adas.network.IHttpEngine;
 import com.openplatform.adas.network.IHttpEngine.ISuccessCallback;
 import com.openplatform.adas.network.IHttpEngine.IFailCallback;
@@ -27,6 +30,7 @@ import com.openplatform.adas.util.MD5Utils;
 import com.openplatform.adas.util.OpenPlatformPrefsKeys;
 import com.openplatform.adas.util.ShellUtils;
 import com.openplatform.adas.util.ShellUtils.CommandResult;
+import com.openplatform.aidl.CmdMesage;
 import com.openplatform.aidl.DownUpgradeInfo;
 import com.openplatform.aidl.PutMsgRequest;
 import com.openplatform.aidl.ServerParamDownloadResponse;
@@ -42,6 +46,7 @@ import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -500,6 +505,100 @@ public class ExecCmdManager {
                 mqttResponse.setResponse(response);
                 mqttResponse.setState(DeviceCommand.MqttCmdState.CmdReceived);
                 NotifyManager.getInstance().OnMqttTakePicNotify(command,mqttResponse,null);
+            }else if(command.equalsIgnoreCase("TerminalParamArray")){
+                Log.d(TAG,"processEvent-----TerminalParamArray cmd");
+                final String _deviceId = deviceId;
+                final String _cmdSNO = cmdSNO;
+                final MqttParamResponse mqttResponse = new MqttParamResponse();
+                try {
+                    JSONArray array = jsonCmdMsg.getJSONArray("data");
+                    final String[] contents = new String[array.length()];
+                    for(int i = 0;i<array.length();i++){
+                        contents[i] = array.getString(i);
+                    }
+
+                    Log.d(TAG,"processEvent---TerminalParamArray cmd---->num : "+contents.length);
+                    new SmsMessege(new IOnCmdMessageProc() {
+                        @Override
+                        public void onSmsMessageProc(List<CmdMesage> list) {
+                            mqttResponse.setDeviceId(_deviceId);
+                            mqttResponse.setCmdSNO(_cmdSNO);
+                            mqttResponse.setCommand(command);
+                            MqttParamResponse.Response response = new MqttParamResponse.Response();
+                            response.setFlag(true);
+                            response.setMessage("收到TerminalParamArray指令");
+                            MqttParamResponse.Data data = new MqttParamResponse.Data();
+                            data.setResults(contents);
+                            response.setData(data);
+                            mqttResponse.setResponse(response);
+                            mqttResponse.setState(DeviceCommand.MqttCmdState.CmdReceived);
+
+                            NotifyManager.getInstance().OnMqttParamCmdNotify(command,mqttResponse,list);
+                        }
+                    },contents);
+
+                }catch (Exception e){
+                    e.printStackTrace();
+                    mqttResponse.setDeviceId(_deviceId);
+                    mqttResponse.setCmdSNO(_cmdSNO);
+                    mqttResponse.setCommand(command);
+                    MqttParamResponse.Response response = new MqttParamResponse.Response();
+                    response.setFlag(true);
+                    response.setMessage("收到TerminalParamArray指令");
+                    MqttParamResponse.Data data = new MqttParamResponse.Data();
+                    data.setResults(new String[]{mCmd});
+                    response.setData(data);
+                    mqttResponse.setResponse(response);
+                    mqttResponse.setState(DeviceCommand.MqttCmdState.CmdExecuted_Failed);
+                    NotifyManager.getInstance().OnMqttParamCmdNotify(command,mqttResponse,null);
+                }
+
+            }else if(command.equalsIgnoreCase("TerminalParamArrayUpdate")){
+                Log.d(TAG,"processEvent-----TerminalParamArrayUpdate cmd");
+                final String _deviceId = deviceId;
+                final String _cmdSNO = cmdSNO;
+                final MqttParamResponse mqttResponse = new MqttParamResponse();
+                try {
+                    JSONArray array = jsonCmdMsg.getJSONArray("data");
+                    final String[] contents = new String[array.length()];
+                    for(int i = 0;i<array.length();i++){
+                        contents[i] = array.getString(i);
+                    }
+                    Log.d(TAG,"processEvent---TerminalParamArrayUpdate cmd---->num : "+contents.length);
+                    new SmsMessege(new IOnCmdMessageProc() {
+                        @Override
+                        public void onSmsMessageProc(List<CmdMesage> list) {
+                            mqttResponse.setDeviceId(_deviceId);
+                            mqttResponse.setCmdSNO(_cmdSNO);
+                            mqttResponse.setCommand(command);
+                            MqttParamResponse.Response response = new MqttParamResponse.Response();
+                            response.setFlag(true);
+                            response.setMessage("收到TerminalParamArrayUpdate指令");
+                            MqttParamResponse.Data data = new MqttParamResponse.Data();
+                            data.setResults(contents);
+                            response.setData(data);
+                            mqttResponse.setResponse(response);
+                            mqttResponse.setState(DeviceCommand.MqttCmdState.CmdReceived);
+
+                            NotifyManager.getInstance().OnMqttParamCmdNotify(command,mqttResponse,list);
+                        }
+                    },contents);
+                }catch (Exception e){
+                    e.printStackTrace();
+                    mqttResponse.setDeviceId(_deviceId);
+                    mqttResponse.setCmdSNO(_cmdSNO);
+                    mqttResponse.setCommand(command);
+                    MqttParamResponse.Response response = new MqttParamResponse.Response();
+                    response.setFlag(true);
+                    response.setMessage("收到TerminalParamArrayUpdate指令");
+                    MqttParamResponse.Data data = new MqttParamResponse.Data();
+                    data.setResults(new String[]{mCmd});
+                    response.setData(data);
+                    mqttResponse.setResponse(response);
+                    mqttResponse.setState(DeviceCommand.MqttCmdState.CmdExecuted_Failed);
+
+                    NotifyManager.getInstance().OnMqttParamCmdNotify(command,mqttResponse,null);
+                }
             }
 
         }catch (JSONException e) {
